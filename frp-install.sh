@@ -187,39 +187,60 @@ install_frp_program() {
 ##############################
 
 display_action_select() {
+  local index
   local program_file
+  local current_page_size
+
   program_file=$ROOT_PROGRAM_DIR/$program_name
-  program_file=./$program_name
+  if [ $DEV ]; then
+    program_file=./$program_name
+  fi
 
   if [ ! -s $program_file ]; then
-    echo -e "將自動下載 $program_name"
+    echo -e "未偵測到 $program_name 將自動下載 $program_name"
     timeout_prompt 1
     install_frp_program 0
     return
   fi
 
+  loop:
+  index=0
   echo -e "請選則您要的操作:"
   local old_frp_version
   if old_frp_version=$($program_file --version); then
     if [[ "$old_frp_version" < "${frp_versions[0]:1}" ]]; then
-      echo -e "1. 更新"
+      if [ "$option_index" == "$($index - 1)" ]; then
+        echo -e "$((++index)). 更新"
+      fi
     else
-      echo -e "1. 下載舊版"
+      if [ "$option_index" == "$($index - 1)" ]; then
+        echo -e "$((++index)). 下載舊版"
+      fi
     fi
 
-    echo -e "2. 解除安裝"
-    echo -e "3. 設定"
+    if [ "$option_index" == "$($index - 1)" ]; then
+      echo -e "$((++index)). 設定"
+    fi
+    if [ "$option_index" == "$($index - 1)" ]; then
+      echo -e "$((++index)). 解除安裝"
+    fi
+    current_page_size=3
   fi
 
   read -rsn1 -p "請輸入您的選擇: " choice
   case "${choice}" in
   1)
     if [[ "$old_frp_version" < "${frp_versions[0]:1}" ]]; then
-      install_frp_program 1
+      select_version="${frp_versions[0]}"
+      update_select_version
+      download_frp_program 1
     else
+      # 下載舊版
       install_frp_program 1
     fi
     ;;
+  S) ((option_index < 1)) && ((option_index--)) ;;
+  D) ((option_index > current_page_size)) && ((option_index--)) ;;
   2)
     rm $program_file
     echo "解除安裝"
@@ -229,6 +250,7 @@ display_action_select() {
     ;;
   *)
     echo "default (none of above)"
+    loop
     ;;
   esac
 }
@@ -341,6 +363,10 @@ display_versions_select() {
     auto_select_latest_version
   fi
 
+  update_select_version
+}
+
+update_select_version() {
   # select_version -> v0.54.0, use:1 -> 0.54.0
   donwload_file_name=frp_${select_version:1}_linux_${PLATFORM}
   donwload_program_url="$FRP_DONWLOAD_URL/$select_version/$donwload_file_name.tar.gz"
@@ -375,6 +401,13 @@ timeout_prompt() {
   return "$(read -rsn1 -t "$duration")"
 }
 
+print_color() {
+  if [ "$1" -eq 1 ]; then
+    echo -e "${3:-$COLOR_RED}$2$COLOR_END"
+  else
+    echo -e "$2"
+  fi
+}
 ##############################
 #         Root Script        #
 ##############################
