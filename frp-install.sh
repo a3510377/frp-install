@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export VERSION="0.0.1"
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export FRP_ROOT_URL="https://github.com/fatedier/frp"
 export FRP_VERSIONS_API="https://api.github.com/repos/fatedier/frp/tags"
@@ -9,8 +10,9 @@ export FRP_DONWLOAD_URL="$FRP_ROOT_URL/releases/download"
 #           DEFINE           #
 VERSIONS_PAGE_SIZE=8
 DEFAULT_LANG_FILE=lang/C.sh
-ROOT_PROGRAM_DIR="/usr/local/"
-ROOT_PROGRAM_INIT_DIR="/etc/init.d/"
+ROOT_PROGRAM_DIR="/usr/local/frp"
+ROOT_SERVICE_DIR="/lib/systemd/system"
+ROOT_PROGRAM_INIT_DIR="/etc/init.d"
 NAME_FRPS="frps"
 NAME_FRPC="frpc"
 
@@ -20,7 +22,15 @@ COLOR_YELOW='\E[1;33m'
 COLOR_END='\E[0m'
 
 TEST_DATA="v0.54.0 v0.53.2 v0.53.1 v0.53.0 v0.52.3 v0.52.2 v0.52.1 v0.52.0 v0.51.3 v0.51.2"
+#$$ REPLACE_ME $$
 DEV=true
+
+if [ $DEV ]; then
+  ROOT_PROGRAM_DIR="."
+  ROOT_SERVICE_DIR="."
+  ROOT_PROGRAM_INIT_DIR="."
+fi
+
 #           DEFINE           #
 ##############################
 
@@ -136,14 +146,11 @@ install_net_tools() {
 download_frp_program() {
   local program_file
 
-  # program_file=$ROOT_PROGRAM_DIR/$program_name
-  program_file=./${program_name}
+  program_file=$ROOT_PROGRAM_DIR/$program_name
   # check if the file exists
   if [ ! -s "$program_file" ] || [ "$1" == 1 ]; then
     echo -e "${COLOR_YELOW}$FRP_DOWNLOADING$COLOR_END"
-    rm -rf "$donwload_file_name"
     if ! wget -q "$donwload_program_url" -O "$donwload_file_name"; then
-      # TODO add donwload frp file error message
       echo -e "${COLOR_RED}$DOWNLOAD_FRP_FAIL$COLOR_END"
     fi
     tar xzf "$donwload_file_name"
@@ -153,7 +160,6 @@ download_frp_program() {
 
     # check that the file is installed
     if [ ! -s "$program_file" ]; then
-      # TODO add donwload frp file error message
       echo -e " ${COLOR_RED}$DOWNLOAD_FRP_FAIL$COLOR_END"
       exit 1
     fi
@@ -171,24 +177,108 @@ download_frp_program() {
 install_frp_program() {
   display_versions_select
   download_frp_program "$1"
+  setup_frp_service
+}
 
-  case "$program_name" in
-  "$NAME_FRPS")
-    # TODO call program setup [frps]
-    ;;
-  "$NAME_FRPC")
-    # TODO call program setup [frpc]
-    ;;
-  esac
+setup_frp_service() {
+  local program_file
+  program_file=$ROOT_PROGRAM_DIR/$program_name
+
+  cat >"$ROOT_SERVICE_DIR"/"$program_name".service <<-EOF
+# Use https://github.com/a3510377/frp-install to install frp
+
+[Unit]
+Description=A fast reverse proxy to help you expose a local server behind a NAT or firewall to the internet.
+Documentation=https://github.com/fatedier/frp
+After=network.target syslog.target
+Wants=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5s
+ExecStart=$program_file -c $program_file.ini
+ExecStop=/bin/kill -s QUIT \$MAINPID
+StandardOutput=syslog
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+}
+
+uninstall_frp_program() {
+  local program_file
+  local program_service
+
+  program_file=$ROOT_PROGRAM_DIR/$program_name
+  program_service=$ROOT_SERVICE_DIR/"$program_name".service
+
+  if "$(systemctl | grep $program_name)"; then
+    systemctl stop $program_name
+    systemctl disable $program_name
+  fi
+
+  # remove program file
+  if [ -s "$program_file" ]; then
+    rm -f "$program_file"
+  fi
+
+  # remove service file
+  if [ -s "$program_service" ]; then
+    rm -f "$program_service"
+  fi
 }
 
 ##############################
 #          UI Script         #
 ##############################
 
+display_select_program() {
+  local option_index
+  local current_page_size
+
+  option_index=1
+  current_page_size=2
+
+  while true; do
+    echo -e "請選擇您要安裝的類型:"
+    print_color $(("$option_index" == 1)) "  1. 伺服端"
+    print_color $(("$option_index" == 2)) "  2. 客戶端"
+
+    read -rsn1 -p "請輸入您的選擇: " choice
+    case "${choice}" in
+    '') break ;;
+    [1-2])
+      option_index=$choice
+      break
+      ;;
+    # A: up arrow
+    w | A) ((option_index > 1)) && ((option_index--)) ;;
+    # B: down arrow
+    s | B) ((option_index < current_page_size)) && ((option_index++)) ;;
+    *)
+      echo "default (none of above)"
+      ;;
+    esac
+    clear
+  done
+  clear
+  case "$option_index" in
+  1)
+    program_name=$NAME_FRPS
+    ;;
+  2)
+    program_name=$NAME_FRPC
+    ;;
+  esac
+}
+
 display_action_select() {
   local index
+  local option_index
   local program_file
+  local old_frp_version
   local current_page_size
 
   program_file=$ROOT_PROGRAM_DIR/$program_name
@@ -196,61 +286,66 @@ display_action_select() {
     program_file=./$program_name
   fi
 
-  if [ ! -s $program_file ]; then
+  if [ ! -s "$program_file" ]; then
     echo -e "未偵測到 $program_name 將自動下載 $program_name"
     timeout_prompt 1
     install_frp_program 0
     return
   fi
 
-  loop:
-  index=0
-  echo -e "請選則您要的操作:"
-  local old_frp_version
-  if old_frp_version=$($program_file --version); then
-    if [[ "$old_frp_version" < "${frp_versions[0]:1}" ]]; then
-      if [ "$option_index" == "$($index - 1)" ]; then
-        echo -e "$((++index)). 更新"
+  option_index=1
+  while true; do
+    echo -e "請選則您要的操作:"
+    index=0
+    if old_frp_version=$($program_file --version); then
+      if [[ "$old_frp_version" < "${frp_versions[0]:1}" ]]; then
+        print_color $(("$option_index" == ++index)) "  $index. 更新"
+      else
+        print_color $(("$option_index" == ++index)) "  $index. 下載舊版"
       fi
-    else
-      if [ "$option_index" == "$($index - 1)" ]; then
-        echo -e "$((++index)). 下載舊版"
-      fi
+
+      print_color $(("$option_index" == ++index)) "  $index. 設定"
+      print_color $(("$option_index" == ++index)) "  $index. 解除安裝"
+      current_page_size=$index
     fi
 
-    if [ "$option_index" == "$($index - 1)" ]; then
-      echo -e "$((++index)). 設定"
-    fi
-    if [ "$option_index" == "$($index - 1)" ]; then
-      echo -e "$((++index)). 解除安裝"
-    fi
-    current_page_size=3
-  fi
+    read -rsn1 -p "請輸入您的選擇: " choice
+    case "${choice}" in
+    '') break ;;
+    [1-3])
+      option_index="$choice"
+      break
+      ;;
+    # A: up arrow
+    w | A) ((option_index > 1)) && ((option_index--)) ;;
+    # B: down arrow
+    s | B) ((option_index < current_page_size)) && ((option_index++)) ;;
+    *)
+      echo "default (none of above)"
+      ;;
+    esac
+    clear
+  done
+  clear
 
-  read -rsn1 -p "請輸入您的選擇: " choice
-  case "${choice}" in
+  case "${option_index}" in
   1)
     if [[ "$old_frp_version" < "${frp_versions[0]:1}" ]]; then
       select_version="${frp_versions[0]}"
       update_select_version
       download_frp_program 1
+      setup_frp_service
     else
-      # 下載舊版
+      # Install old version
       install_frp_program 1
     fi
     ;;
-  S) ((option_index < 1)) && ((option_index--)) ;;
-  D) ((option_index > current_page_size)) && ((option_index--)) ;;
   2)
-    rm $program_file
-    echo "解除安裝"
-    ;;
-  3)
     echo "設定"
     ;;
-  *)
-    echo "default (none of above)"
-    loop
+  3)
+    uninstall_frp_program
+    echo "解除安裝"
     ;;
   esac
 }
@@ -280,11 +375,7 @@ display_slice_versions() {
   index=0
   for version in "${current_page_list[@]:1}"; do
     ((index++))
-    if [ $index == "$option_index" ]; then
-      echo -e "$COLOR_GREEN$index: $version$COLOR_END"
-    else
-      echo -e "$index: $version"
-    fi
+    print_color $(("$index" == "$option_index")) "$index: $version"
   done
 }
 
@@ -311,7 +402,7 @@ display_versions_select() {
     while [ -z "$select_version" ]; do
       case $input in
       # $'\e[C': rigt
-      n | C)
+      d | n | C)
         if (("$page" < "$maxpage")); then
           option_index=1
           ((page++))
@@ -320,7 +411,7 @@ display_versions_select() {
         fi
         ;;
       # $'\e[D': left
-      p | D)
+      a | p | D)
         if (("$page" > 1)); then
           option_index=1
           ((page--))
@@ -329,9 +420,9 @@ display_versions_select() {
         fi
         ;;
       # up
-      A) (("$option_index" > 1)) && ((option_index--)) ;;
+      w | A) (("$option_index" > 1)) && ((option_index--)) ;;
       # down
-      B) (("$option_index" < "$current_page_size")) && ((option_index++)) ;;
+      s | B) (("$option_index" < "$current_page_size")) && ((option_index++)) ;;
       [1-9])
         if (("$input" >= 1)) && (("$input" <= "$current_page_size")); then
           option_index=$(("$input"))
@@ -386,7 +477,6 @@ auto_select_latest_version() {
 
 # print script base info
 script_info() {
-  # TODO add show version
   echo "+------------------------------------------------------------+"
   echo "|              frp for Linux, Author: a3510377               |"
   echo "|         A tool to auto install frp client or server        |"
@@ -407,6 +497,13 @@ print_color() {
   else
     echo -e "$2"
   fi
+}
+
+# shellcheck disable=SC2120
+rand_str() {
+  strRandomPass=""
+  strRandomPass=$(tr -cd '[:alnum:]_\-+=%#' </dev/urandom | fold -w "${1:-16}" | head -n1)
+  echo "${strRandomPass}"
 }
 ##############################
 #         Root Script        #
@@ -439,6 +536,6 @@ check_is_root
 get_arch
 pre_install_packs
 
+display_select_program
 fetch_versions
-# install_frp_program
 display_action_select
