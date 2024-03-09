@@ -26,9 +26,9 @@ TEST_DATA="v0.54.0 v0.53.2 v0.53.1 v0.53.0 v0.52.3 v0.52.2 v0.52.1 v0.52.0 v0.51
 DEV=true
 
 if [ $DEV ]; then
-  ROOT_PROGRAM_DIR="."
-  ROOT_SERVICE_DIR="."
-  ROOT_PROGRAM_INIT_DIR="."
+  ROOT_PROGRAM_DIR="./test/frp"
+  ROOT_SERVICE_DIR="./test"
+  ROOT_PROGRAM_INIT_DIR="./test/config/frp"
 fi
 
 #           DEFINE           #
@@ -146,6 +146,7 @@ install_net_tools() {
 download_frp_program() {
   local program_file
 
+  mkdir -p $ROOT_PROGRAM_DIR
   program_file=$ROOT_PROGRAM_DIR/$program_name
   # check if the file exists
   if [ ! -s "$program_file" ] || [ "$1" == 1 ]; then
@@ -182,6 +183,8 @@ install_frp_program() {
 
 setup_frp_service() {
   local program_file
+
+  mkdir -p $ROOT_SERVICE_DIR
   program_file=$ROOT_PROGRAM_DIR/$program_name
 
   cat >"$ROOT_SERVICE_DIR"/"$program_name".service <<-EOF
@@ -282,9 +285,6 @@ display_action_select() {
   local current_page_size
 
   program_file=$ROOT_PROGRAM_DIR/$program_name
-  if [ $DEV ]; then
-    program_file=./$program_name
-  fi
 
   if [ ! -s "$program_file" ]; then
     echo -e "未偵測到 $program_name 將自動下載 $program_name"
