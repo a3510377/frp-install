@@ -539,3 +539,22 @@ pre_install_packs
 display_select_program
 fetch_versions
 display_action_select
+
+OPTIONS=""
+
+while getopts "$OPTIONS" opt "$@"; do
+  case "$opt" in
+  s)
+    echo "$OPTARG"
+    exit 0
+    ;;
+  :)
+    echo "Option -$OPTARG requires an argument."
+    exit 1
+    ;;
+  ?)
+    echo "Invalid option: -$OPTARG"
+    ;;
+  esac
+done
+shift $((OPTIND - 1))
