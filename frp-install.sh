@@ -531,7 +531,23 @@ else
   fi
 fi
 
-# setup script
+OPTIONS=":h"
+
+if [ $# -ne 0 ]; then
+  while getopts "$OPTIONS" opt "$@"; do
+    case "$opt" in
+    h | *)
+      echo "Usage: $0 [options]"
+      echo "Options:"
+      echo "  -h  Display this help message"
+      exit 0
+      ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+fi
+
+setup script
 check_is_root
 get_arch
 pre_install_packs
@@ -539,22 +555,3 @@ pre_install_packs
 display_select_program
 fetch_versions
 display_action_select
-
-OPTIONS=""
-
-while getopts "$OPTIONS" opt "$@"; do
-  case "$opt" in
-  s)
-    echo "$OPTARG"
-    exit 0
-    ;;
-  :)
-    echo "Option -$OPTARG requires an argument."
-    exit 1
-    ;;
-  ?)
-    echo "Invalid option: -$OPTARG"
-    ;;
-  esac
-done
-shift $((OPTIND - 1))
