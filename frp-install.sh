@@ -126,17 +126,36 @@ fetch_versions() {
 
 pre_install_packs() {
   install_net_tools
+  install_curl
 }
 
 install_net_tools() {
   if ! netstat --version >/dev/null 2>&1; then
-    echo "$INSTALLING_NET_TOOLS"
+    # shellcheck disable=SC2059
+    printf "$INSTALLING_PACKAGE\n" "$NET_TOOLS_NAME"
     if [[ -f /etc/redhat-release ]]; then
       sudo yum install -y net-tools
     elif [[ -f /etc/debian_version ]]; then
       sudo apt-get update && sudo apt-get install -y net-tools
     else
-      echo "$COLOR_RED$UNKNOWN_DISTRIBUTION$COLOR_END"
+      # shellcheck disable=SC2059
+      printf "$COLOR_RED$UNKNOWN_DISTRIBUTION_ERROR$COLOR_END\n" "$NET_TOOLS_NAME"
+      exit 1
+    fi
+  fi
+}
+
+install_curl() {
+  if ! curl --version >/dev/null 2>&1; then
+    # shellcheck disable=SC2059
+    printf "$INSTALLING_PACKAGE\n" "$CURL_NAME"
+    if [[ -f /etc/redhat-release ]]; then
+      sudo yum install -y curl
+    elif [[ -f /etc/debian_version ]]; then
+      sudo apt-get update && sudo apt-get install -y curl
+    else
+      # shellcheck disable=SC2059
+      printf "$COLOR_RED$UNKNOWN_DISTRIBUTION_ERROR$COLOR_END\n" "$CURL_NAME"
       exit 1
     fi
   fi
@@ -217,7 +236,8 @@ uninstall_frp_program() {
   program_file=$ROOT_PROGRAM_DIR/$program_name
   program_service=$ROOT_SERVICE_DIR/"$program_name".service
 
-  if "$(systemctl | grep $program_name)"; then
+  # disable and stop service
+  if systemctl | grep $program_name; then
     systemctl stop $program_name
     systemctl disable $program_name
   fi
@@ -547,7 +567,7 @@ if [ $# -ne 0 ]; then
   shift $((OPTIND - 1))
 fi
 
-setup script
+# setup script
 check_is_root
 get_arch
 pre_install_packs
