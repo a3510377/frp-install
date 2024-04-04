@@ -542,10 +542,22 @@ rand_str() {
 
 clear
 script_info
+check_is_root
+pre_install_packs
+get_arch
 
 # setup lang
 if [[ -n "$LANG" ]]; then
-  LANG_FILE=lang/${LANG%_*}.sh
+  case "$LANG" in
+  c)
+    LANG_=en
+    ;;
+  *)
+    LANG_=en
+    ;;
+  esac
+
+  LANG_FILE=lang/${LANG_%_*}.sh
 else
   LANG_FILE=$DEFAULT_LANG_FILE
 fi
@@ -562,15 +574,13 @@ else
   fi
 fi
 
-# setup script
-check_is_root
-get_arch
-pre_install_packs
-
 OPTIONS="hcsv::"
 if [ $# -ne 0 ]; then
   while getopts "$OPTIONS" opt "$@"; do
     case "$opt" in
+    v)
+      echo $OPTARG
+      ;;
     c | s)
       if [[ $option_program -ne 0 ]]; then
         echo -e "$COLOR_RED$INSTALL_SELECT_ONE_PROGRAM_ONLY$COLOR_END"
