@@ -206,6 +206,7 @@ download_frp_program() {
 # if $1 is 1, override old frp program
 install_frp_program() {
   display_versions_select
+  update_select_version
   download_frp_program "$1"
   setup_frp_service
 }
@@ -484,8 +485,6 @@ display_versions_select() {
   else
     auto_select_latest_version
   fi
-
-  update_select_version
 }
 
 update_select_version() {
@@ -579,7 +578,7 @@ if [ $# -ne 0 ]; then
   while getopts "$OPTIONS" opt "$@"; do
     case "$opt" in
     v)
-      echo $OPTARG
+      $OPTARG
       ;;
     c | s)
       if [[ $option_program -ne 0 ]]; then
