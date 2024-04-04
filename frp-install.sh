@@ -19,6 +19,7 @@ NAME_FRPC="frpc"
 COLOR_RED='\E[1;31m'
 COLOR_GREEN='\E[1;32m'
 COLOR_YELOW='\E[1;33m'
+COLOR_CYAN='\E[1;36m'
 COLOR_END='\E[0m'
 
 TEST_DATA="v0.54.0 v0.53.2 v0.53.1 v0.53.0 v0.52.3 v0.52.2 v0.52.1 v0.52.0 v0.51.3 v0.51.2"
@@ -38,6 +39,15 @@ program_name=$NAME_FRPC
 donwload_file_name=""
 donwload_program_url=""
 frp_versions=()
+
+###############################
+#       COMMAND_OPTIONS       #
+
+# 0: not set, 1: frps, 2: frpc
+option_program=0
+
+#       COMMAND_OPTIONS       #
+###############################
 
 check_is_root() {
   if [[ $EUID -ne 0 ]]; then
@@ -261,31 +271,33 @@ display_select_program() {
   local option_index
   local current_page_size
 
-  option_index=1
+  option_index=$option_program
   current_page_size=2
 
-  while true; do
-    echo -e "請選擇您要安裝的類型:"
-    print_color $(("$option_index" == 1)) "  1. 伺服端"
-    print_color $(("$option_index" == 2)) "  2. 客戶端"
+  if [ "$option_program" -eq 0 ]; then
+    while true; do
+      echo -e "請選擇您要安裝的類型:"
+      print_color $(("$option_index" == 1)) "  1. 伺服端"
+      print_color $(("$option_index" == 2)) "  2. 客戶端"
 
-    read -rsn1 -p "請輸入您的選擇: " choice
-    case "${choice}" in
-    '') break ;;
-    [1-2])
-      option_index=$choice
-      break
-      ;;
-    # A: up arrow
-    w | A) ((option_index > 1)) && ((option_index--)) ;;
-    # B: down arrow
-    s | B) ((option_index < current_page_size)) && ((option_index++)) ;;
-    *)
-      echo "default (none of above)"
-      ;;
-    esac
-    clear
-  done
+      read -rsn1 -p "請輸入您的選擇: " choice
+      case "${choice}" in
+      '') break ;;
+      [1-2])
+        option_index=$choice
+        break
+        ;;
+      # A: up arrow
+      w | A) ((option_index > 1)) && ((option_index--)) ;;
+      # B: down arrow
+      s | B) ((option_index < current_page_size)) && ((option_index++)) ;;
+      *)
+        echo "default (none of above)"
+        ;;
+      esac
+      clear
+    done
+  fi
   clear
   case "$option_index" in
   1)
@@ -372,7 +384,6 @@ display_action_select() {
 
 ##############################
 ##      Version Select      ##
-
 get_slice_versions() {
   local versions
   local page
@@ -551,26 +562,32 @@ else
   fi
 fi
 
-OPTIONS=":h"
+# setup script
+check_is_root
+get_arch
+pre_install_packs
 
+OPTIONS="hcsv::"
 if [ $# -ne 0 ]; then
   while getopts "$OPTIONS" opt "$@"; do
     case "$opt" in
-    h | *)
-      echo "Usage: $0 [options]"
-      echo "Options:"
-      echo "  -h  Display this help message"
+    c | s)
+      if [[ $option_program -ne 0 ]]; then
+        echo -e "$COLOR_RED$INSTALL_SELECT_ONE_PROGRAM_ONLY$COLOR_END"
+        exit 1
+      fi
+
+      [[ $opt == "s" ]] && option_program=1
+      [[ $opt == "c" ]] && option_program=2
+      ;;
+    h | :)
+      echo -e "$COMMAND_USAGE"
       exit 0
       ;;
     esac
   done
   shift $((OPTIND - 1))
 fi
-
-# setup script
-check_is_root
-get_arch
-pre_install_packs
 
 display_select_program
 fetch_versions
