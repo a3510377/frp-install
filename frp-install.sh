@@ -9,7 +9,7 @@ export FRP_DONWLOAD_URL="$FRP_ROOT_URL/releases/download"
 ##############################
 #           DEFINE           #
 VERSIONS_PAGE_SIZE=8
-DEFAULT_LANG_FILE=lang/C.sh
+DEFAULT_LANG=en
 ROOT_PROGRAM_DIR="/usr/local/frp"
 ROOT_SERVICE_DIR="/lib/systemd/system"
 ROOT_PROGRAM_INIT_DIR="/etc/init.d"
@@ -49,6 +49,7 @@ option_program=0
 #       COMMAND_OPTIONS       #
 ###############################
 
+# check run in root
 check_is_root() {
   if [[ $EUID -ne 0 ]]; then
     echo -e "$COLOR_RED$NOT_ROOT_ERROR$COLOR_END" 1>&2
@@ -56,6 +57,8 @@ check_is_root() {
   fi
 }
 
+# $1: port
+# has port in 0-65535
 validate_port() {
   if [[ $1 -ge 0 && $1 -le 65535 ]]; then
     return 0
@@ -63,6 +66,8 @@ validate_port() {
   return 1
 }
 
+# $1: port
+# check port is used
 check_port() {
   if validate_port "$1" && netstat -tuln | grep ":$1\b" >/dev/null; then
     return 0
@@ -70,6 +75,8 @@ check_port() {
   return 1
 }
 
+# $1: port or port range
+# check port or port range is used
 parse_check_port_ports() {
   IFS=',' read -ra ports <<<"$1"
   for range in "${ports[@]}"; do
@@ -86,6 +93,7 @@ parse_check_port_ports() {
   return 1
 }
 
+# get arch
 get_arch() {
   local ARCH
   ARCH=$(uname -m)
@@ -121,6 +129,7 @@ get_arch() {
   esac
 }
 
+# fetch frp versions
 fetch_versions() {
   # Prevent rate limiting in development
   if [ $DEV ]; then
@@ -134,11 +143,13 @@ fetch_versions() {
 #     Lib Install Script     #
 ##############################
 
+# install pre packs
 pre_install_packs() {
   install_net_tools
   install_curl
 }
 
+# install net tools
 install_net_tools() {
   if ! netstat --version >/dev/null 2>&1; then
     # shellcheck disable=SC2059
@@ -155,6 +166,7 @@ install_net_tools() {
   fi
 }
 
+# install curl
 install_curl() {
   if ! curl --version >/dev/null 2>&1; then
     # shellcheck disable=SC2059
@@ -211,6 +223,7 @@ install_frp_program() {
   setup_frp_service
 }
 
+# setup frp service
 setup_frp_service() {
   local program_file
 
@@ -240,6 +253,7 @@ EOF
   systemctl daemon-reload
 }
 
+# uninstall frp program
 uninstall_frp_program() {
   local program_file
   local program_service
@@ -268,6 +282,7 @@ uninstall_frp_program() {
 #          UI Script         #
 ##############################
 
+# display select program
 display_select_program() {
   local option_index
   local current_page_size
@@ -310,6 +325,7 @@ display_select_program() {
   esac
 }
 
+# display action select
 display_action_select() {
   local index
   local option_index
@@ -385,6 +401,9 @@ display_action_select() {
 
 ##############################
 ##      Version Select      ##
+
+# $1: page, $2: versions
+# get slice versions
 get_slice_versions() {
   local versions
   local page
@@ -397,6 +416,8 @@ get_slice_versions() {
   echo "${versions[@]:$start:$VERSIONS_PAGE_SIZE}"
 }
 
+# $1: option_index, $2: current_page_list
+# display slice versions
 display_slice_versions() {
   local option_index
   local current_page_list
@@ -411,6 +432,7 @@ display_slice_versions() {
   done
 }
 
+# display versions select
 display_versions_select() {
   local page
   local option_index
@@ -430,7 +452,7 @@ display_versions_select() {
   display_slice_versions "$option_index" "${current_page_list[@]}"
   echo -e "兩秒後將選擇自動選擇為最新版"
   local input
-  if read -rsn1 -t 2 -p "請選擇您要的版本 (p: 上一頁, n: 下一頁): " input && clear; then
+  if [ $1 = true ] || read -rsn1 -t 2 -p "請選擇您要的版本 (p: 上一頁, n: 下一頁): " input && clear; then
     while [ -z "$select_version" ]; do
       case $input in
       # $'\e[C': rigt
@@ -487,12 +509,14 @@ display_versions_select() {
   fi
 }
 
+# update select version
 update_select_version() {
   # select_version -> v0.54.0, use:1 -> 0.54.0
   donwload_file_name=frp_${select_version:1}_linux_${PLATFORM}
   donwload_program_url="$FRP_DONWLOAD_URL/$select_version/$donwload_file_name.tar.gz"
 }
 
+# auto select latest version
 auto_select_latest_version() {
   select_version="${frp_versions[0]}"
   echo && clear
@@ -514,6 +538,7 @@ script_info() {
   echo "+------------------------------------------------------------+"
 }
 
+# $1: duration
 timeout_prompt() {
   local duration=$1
   echo "等候 $duration 秒後將自動執行，或按下任一鍵繼續 ..."
@@ -521,6 +546,7 @@ timeout_prompt() {
   return "$(read -rsn1 -t "$duration")"
 }
 
+# $1: is_color, $2: text, $3: color - default red
 print_color() {
   if [ "$1" -eq 1 ]; then
     echo -e "${3:-$COLOR_RED}$2$COLOR_END"
@@ -545,21 +571,21 @@ check_is_root
 pre_install_packs
 get_arch
 
+LANG_=$DEFAULT_LANG
+
 # setup lang
 if [[ -n "$LANG" ]]; then
-  case "$LANG" in
-  c)
+  case $(echo "${LANG%_*}" | tr '[:upper:]' '[:lower:]') in
+  c | en)
     LANG_=en
     ;;
-  *)
-    LANG_=en
+  zh)
+    LANG_=zh
     ;;
   esac
-
-  LANG_FILE=lang/${LANG_%_*}.sh
-else
-  LANG_FILE=$DEFAULT_LANG_FILE
 fi
+
+LANG_FILE=lang/${LANG_}.sh
 if [[ -f $LANG_FILE ]]; then
   # shellcheck disable=SC1090
   source "$LANG_FILE"
@@ -578,7 +604,13 @@ if [ $# -ne 0 ]; then
   while getopts "$OPTIONS" opt "$@"; do
     case "$opt" in
     v)
-      $OPTARG
+      if [ -f $OPTARG ]; then
+        select_version=$(cat $OPTARG)
+      else
+        fetch_versions
+        display_versions_select
+      fi
+      option_version=$OPTARG
       ;;
     c | s)
       if [[ $option_program -ne 0 ]]; then
